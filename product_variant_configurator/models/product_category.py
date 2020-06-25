@@ -34,5 +34,5 @@ class ProductCategory(models.Model):
         if "no_create_variants" in values and not values.get("no_create_variants"):
             self.env["product.template"].search(
                 [("categ_id", "=", self.id), ("no_create_variants", "=", "empty")]
-            ).create_variant_ids()
+            )._create_variant_ids()
         return res

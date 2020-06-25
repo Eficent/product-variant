@@ -54,7 +54,7 @@ class ProductTemplate(models.Model):
     def write(self, values):
         res = super(ProductTemplate, self).write(values)
         if "no_create_variants" in values:
-            self.create_variant_ids()
+            self._create_variant_ids()
         return res
 
     def _get_product_attributes_dict(self):
@@ -62,10 +62,10 @@ class ProductTemplate(models.Model):
             lambda x: {"attribute_id": x.attribute_id.id}
         )
 
-    def create_variant_ids(self):
+    def _create_variant_ids(self):
         obj = self.with_context(creating_variants=True)
         if config["test_enable"] and not self.env.context.get("check_variant_creation"):
-            return super(ProductTemplate, obj).create_variant_ids()
+            return super(ProductTemplate, obj)._create_variant_ids()
         for tmpl in obj:
             if (
                 (
@@ -75,7 +75,7 @@ class ProductTemplate(models.Model):
                 or tmpl.no_create_variants == "no"
                 or not tmpl.attribute_line_ids
             ):
-                super(ProductTemplate, tmpl).create_variant_ids()
+                super(ProductTemplate, tmpl)._create_variant_ids()
         return True
 
     @api.model
