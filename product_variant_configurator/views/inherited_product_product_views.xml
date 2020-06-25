@@ -12,7 +12,7 @@
             </field>
             <field name="product_tmpl_id" position="attributes">
                 <attribute name="placeholder">Product Template</attribute>
-                <atribute name="invisible">0</atribute>
+                <attribute name="invisible">0</attribute>
                 <attribute name="readonly">0</attribute>
                 <attribute
                     name="attrs"
