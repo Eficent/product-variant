@@ -7,8 +7,6 @@ import logging
 
 from odoo import _, api, exceptions, fields, models
 
-from odoo.addons import decimal_precision as dp
-
 _logger = logging.getLogger(__name__)
 
 
@@ -28,7 +26,7 @@ class ProductConfigurator(models.AbstractModel):
     )
     price_extra = fields.Float(
         compute="_compute_price_extra",
-        digits=dp.get_precision("Product Price"),
+        digits="Product Price",
         help="Price Extra: Extra price for the variant with the currently "
         "selected attributes values on sale price. eg. 200 price extra, "
         "1000 + 200 = 1200.",
@@ -141,7 +139,7 @@ class ProductConfigurator(models.AbstractModel):
             products = product_obj.search(domain)
             # Filter the product with the exact number of attributes values
             for product in products:
-                if len(product.attribute_value_ids) == cont:
+                if len(product.product_template_attribute_value_ids) == cont:
                     self.product_id = product.id
                     break
         if not self.product_id:
@@ -173,7 +171,9 @@ class ProductConfigurator(models.AbstractModel):
                     .browse(self.product_id.id)
                 )
             self.name = self._get_product_description(
-                product.product_tmpl_id, product, product.attribute_value_ids
+                product.product_tmpl_id,
+                product,
+                product.product_template_attribute_value_ids,
             )
             self.product_tmpl_id = product.product_tmpl_id.id
             self._set_product_attributes()
@@ -208,10 +208,10 @@ class ProductConfigurator(models.AbstractModel):
     def _get_product_description(self, template, product, product_attributes):
         name = product and product.name or template.name
         extended = self.user_has_groups(
-            "product_variant_configurator." "group_product_variant_extended_description"
+            "product_variant_configurator.group_product_variant_extended_description"
         )
         if not product_attributes and product:
-            product_attributes = product.attribute_value_ids
+            product_attributes = product.product_template_attribute_value_ids
         values = self._order_attributes(template, product_attributes)
         if extended:
             description = "\n".join(
@@ -271,7 +271,7 @@ class ProductConfigurator(models.AbstractModel):
             product = product_obj.create(
                 {
                     "product_tmpl_id": self.product_tmpl_id.id,
-                    "attribute_value_ids": [
+                    "product_template_attribute_value_ids": [
                         (6, 0, self.product_attribute_ids.mapped("value_id").ids)
                     ],
                 }

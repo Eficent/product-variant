@@ -16,6 +16,7 @@ class TestProductVariantConfigurator(SavepointCase):
         cls.product_attribute = cls.env["product.attribute"]
         cls.product_attribute_value = cls.env["product.attribute.value"]
         cls.product_configurator_attribute = cls.env["product.configurator.attribute"]
+        cls.product_template_attribute_line = cls.env["product.template.attribute.line"]
         cls.product_category = cls.env["product.category"]
         cls.product_product = cls.env["product.product"]
         cls.product_template = cls.env["product.template"].with_context(
@@ -88,6 +89,41 @@ class TestProductVariantConfigurator(SavepointCase):
                             "value_ids": [(6, 0, [cls.value1.id, cls.value2.id])],
                         },
                     )
+                ],
+            }
+        )
+
+    def _get_ptav_id(self, attribute, value, tmpl):
+        # attr_value = tmpl.attribute_line_ids.value_ids.filtered(lambda x: x.)
+        attr_value = (
+            self.env["product.template.attribute.value"]
+            .search(
+                [
+                    ("attribute_id", "=", attribute.id),
+                    ("product_attribute_value_id", "=", value.id),
+                    ("product_tmpl_id", "=", tmpl.id),
+                ]
+            )
+            .id
+        )
+        if not attr_value:
+            attr_value = self.env["product.template.attribute.value"].create(
+                {
+                    "attribute_id": attribute.id,
+                    "product_attribute_value_id": value.id,
+                    "product_tmpl_id": tmpl.id,
+                    "attribute_line_id": tmpl.attribute_line_ids[0].id,
+                }
+            )
+        return attr_value
+
+    def _create_product_product(self, name, tmpl, attribute, value):
+        return self.product_product.create(
+            {
+                "name": name,
+                "product_tmpl_id": tmpl.id,
+                "product_template_attribute_value_ids": [
+                    (4, self._get_ptav_id(attribute, value, tmpl))
                 ],
             }
         )
@@ -187,12 +223,12 @@ class TestProductVariantConfigurator(SavepointCase):
             }
         )
         # check that even if the OneToMany
-        # from product.configurator.product_attribute_ids to
+        # from product.configurator.product_template_attribute_value_ids to
         # product.configurator.attribute declare an inverse on owner_id
         # declared as fields.Integer, the cascade works as expected
         product = tmpl.product_variant_ids[0]
         self.assertEqual(1, len(product))
-        product.write({"product_attribute_ids": [(5,)]})
+        product.write({"product_template_attribute_value_ids": [(5,)]})
         res_count = self.product_configurator_attribute.search_count(
             [("owner_id", "=", product.id)]
         )
@@ -264,7 +300,9 @@ class TestProductVariantConfigurator(SavepointCase):
         )
         self.assertEqual(
             product._get_product_description(
-                product.product_tmpl_id, product, product.attribute_value_ids
+                product.product_tmpl_id,
+                product,
+                product.product_template_attribute_value_ids,
             ),
             "Product template 1",
         )
@@ -276,7 +314,9 @@ class TestProductVariantConfigurator(SavepointCase):
         self.env.ref(group_id).write({"users": [(4, self.current_user.id)]})
         self.assertEqual(
             product._get_product_description(
-                product.product_tmpl_id, product, product.attribute_value_ids
+                product.product_tmpl_id,
+                product,
+                product.product_template_attribute_value_ids,
             ),
             "Product template 1",
         )
@@ -345,46 +385,16 @@ class TestProductVariantConfigurator(SavepointCase):
             }
         )
         # This one shouldn't fail
-        self.product_product.create(
-            {
-                "name": "Test product Check",
-                "product_tmpl_id": tmpl.id,
-                "product_attribute_ids": [
-                    (
-                        0,
-                        0,
-                        {
-                            "product_tmpl_id": tmpl.id,
-                            "attribute_id": self.attribute1.id,
-                            "value_id": self.value1.id,
-                            "owner_model": "product.product",
-                        },
-                    )
-                ],
-            }
+        self._create_product_product(
+            "Test product Check", tmpl, self.attribute1, self.value1
         )
         # And this one should
         with self.cr.savepoint(), self.assertRaises(ValidationError):
-            self.product_product.create(
-                {
-                    "name": "Test product Check",
-                    "product_tmpl_id": tmpl.id,
-                    "product_attribute_ids": [
-                        (
-                            0,
-                            0,
-                            {
-                                "product_tmpl_id": tmpl.id,
-                                "attribute_id": self.attribute2.id,
-                                "value_id": self.value3.id,
-                                "owner_model": "product.product",
-                            },
-                        )
-                    ],
-                }
+            self._create_product_product(
+                "Test product Check", tmpl, self.attribute2, self.value3
             )
 
-    def test_onchange_product_attribute_ids(self):
+    def test_onchange_product_template_attribute_value_ids(self):
         product = self.product_product.create(
             {
                 "name": "Test product Check",
@@ -394,135 +404,71 @@ class TestProductVariantConfigurator(SavepointCase):
         product_attribute_vals = {
             "product_tmpl_id": self.product_template_yes.id,
             "attribute_id": self.attribute1.id,
-            "value_id": self.value2.id,
-            "owner_model": "product.product",
-            "owner_id": int(product.id),
+            "product_attribute_value_id": self.value2.id,
         }
         with self.cr.savepoint():
-            product.product_attribute_ids = [(0, 0, product_attribute_vals)]
-            result = product._onchange_product_attribute_ids_configurator()
+            product.product_template_attribute_value_ids = [
+                (0, 0, product_attribute_vals)
+            ]
+            result = (
+                product._onchange_product_template_attribute_value_ids_configurator()
+            )
             self.assertTrue(
                 ("product_tmpl_id", "=", self.product_template_yes.id)
                 in result["domain"]["product_id"]
             )
 
-    def test_onchange_product_attribute_ids_01(self):
-        product = self.product_product.create(
-            {
-                "name": "Test product Check",
-                "product_tmpl_id": self.product_template_yes.id,
-                "product_attribute_ids": [
-                    (
-                        0,
-                        0,
-                        {
-                            "product_tmpl_id": self.product_template_yes.id,
-                            "attribute_id": self.attribute1.id,
-                            "value_id": self.value1.id,
-                            "owner_model": "product.product",
-                        },
-                    )
-                ],
-            }
+    def test_onchange_product_template_attribute_value_ids_01(self):
+        product = self._create_product_product(
+            "Test product Check",
+            self.product_template_yes,
+            self.attribute1,
+            self.value1,
         )
         product_attribute_vals = {
             "product_tmpl_id": self.product_template_yes.id,
             "attribute_id": self.attribute1.id,
-            "value_id": self.value1.id,
+            "product_attribute_value_id": self.value1.id,
             "owner_model": "res.partner",
             "owner_id": int(product.id),
         }
-        product.product_attribute_ids = [(0, 0, product_attribute_vals)]
-        result = product._onchange_product_attribute_ids_configurator()
+        product.product_template_attribute_value_ids = [(0, 0, product_attribute_vals)]
+        result = product._onchange_product_template_attribute_value_ids_configurator()
         self.assertTrue(
             ("product_tmpl_id", "=", self.product_template_yes.id)
             in result["domain"]["product_id"]
         )
 
     def test_onchange_product_id_product_configurator(self):
-        product1 = self.product_product.create(
-            {
-                "name": "Product 1",
-                "product_tmpl_id": self.product_template_yes.id,
-                "product_attribute_ids": [
-                    (
-                        0,
-                        0,
-                        {
-                            "product_tmpl_id": self.product_template_yes.id,
-                            "attribute_id": self.attribute1.id,
-                            "value_id": self.value1.id,
-                            "owner_model": "product.product",
-                        },
-                    )
-                ],
-            }
+        product1 = self._create_product_product(
+            "Product 1", self.product_template_yes, self.attribute1, self.value1
         )
-        product2 = self.product_product.create(
-            {
-                "name": "Product 1",
-                "product_tmpl_id": self.product_template_yes.id,
-                "product_attribute_ids": [
-                    (
-                        0,
-                        0,
-                        {
-                            "product_tmpl_id": self.product_template_yes.id,
-                            "attribute_id": self.attribute2.id,
-                            "value_id": self.value2.id,
-                            "owner_model": "product.product",
-                        },
-                    )
-                ],
-            }
+        product2 = self._create_product_product(
+            "Product 1", self.product_template_yes, self.attribute2, self.value2
         )
         product1.product_id = product2
         product1._onchange_product_id_configurator()
         self.assertEqual(product1.product_id.id, product2.id)
 
     def test_get_product_attributes_values_dict(self):
-        product = self.product_product.create(
-            {
-                "name": "Test product Check",
-                "product_tmpl_id": self.product_template_yes.id,
-                "product_attribute_ids": [
-                    (
-                        0,
-                        0,
-                        {
-                            "product_tmpl_id": self.product_template_yes.id,
-                            "attribute_id": self.attribute1.id,
-                            "value_id": self.value1.id,
-                            "owner_model": "product.product",
-                        },
-                    )
-                ],
-            }
+        product = self._create_product_product(
+            "Test product Check",
+            self.product_template_yes,
+            self.attribute1,
+            self.value1,
         )
         result = product._get_product_attributes_values_dict()
         self.assertEqual(len(result), 1)
         self.assertEqual(
-            result[0], {"attribute_id": self.attribute1.id, "value_id": self.value1.id}
+            result[0], {"attribute_id": self.attribute1.id, "value_id": self.value1.id},
         )
 
     def test_get_product_attributes_values_text(self):
-        product = self.product_product.create(
-            {
-                "name": "Test product Check",
-                "product_tmpl_id": self.product_template_yes.id,
-                "product_attribute_ids": [
-                    (
-                        0,
-                        0,
-                        {
-                            "product_tmpl_id": self.product_template_yes.id,
-                            "attribute_id": self.attribute1.id,
-                            "value_id": self.value1.id,
-                            "owner_model": "product.product",
-                        },
-                    )
-                ],
-            }
+        product = self._create_product_product(
+            "Test product Check",
+            self.product_template_yes,
+            self.attribute1,
+            self.value1,
         )
         result = product._get_product_attributes_values_text()
         expected_result = "{}\n{}: {}".format(
@@ -552,7 +498,6 @@ class TestProductVariantConfigurator(SavepointCase):
                 "value_id": self.value1.id,
                 "product_tmpl_id": self.product_template_yes.id,
                 "owner_id": product.id,
-                "owner_model": "product.product",
             }
         )
         product.product_attribute_ids = [(4, product_attribute.id)]
@@ -568,23 +513,8 @@ class TestProductVariantConfigurator(SavepointCase):
                 "owner_id": 1,
             }
         )
-        product = self.product_product.create(
-            {
-                "name": "Product 1",
-                "product_tmpl_id": self.product_template_yes.id,
-                "product_attribute_ids": [
-                    (
-                        0,
-                        0,
-                        {
-                            "product_tmpl_id": self.product_template_yes.id,
-                            "attribute_id": self.attribute1.id,
-                            "value_id": self.value1.id,
-                            "owner_model": "product.product",
-                        },
-                    )
-                ],
-            }
+        product = self._create_product_product(
+            "Product 1", self.product_template_yes, self.attribute1, self.value1,
         )
         res = self.product_product._product_find(self.product_template_yes, [conf_attr])
         self.assertEqual(res, product)

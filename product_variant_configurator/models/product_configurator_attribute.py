@@ -5,8 +5,6 @@
 
 from odoo import api, fields, models
 
-from odoo.addons import decimal_precision as dp
-
 
 class ProductConfiguratorAttribute(models.Model):
     _name = "product.configurator.attribute"
@@ -42,7 +40,7 @@ class ProductConfiguratorAttribute(models.Model):
     price_extra = fields.Float(
         compute="_compute_price_extra",
         string="Attribute Price Extra",
-        digits=dp.get_precision("Product Price"),
+        digits="Product Price",
         help="Price Extra: Extra price for the variant with this attribute "
         "value on sale price. eg. 200 price extra, 1000 + 200 = 1200.",
     )

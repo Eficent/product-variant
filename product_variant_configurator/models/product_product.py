@@ -21,7 +21,7 @@ class ProductProduct(models.Model):
             value = self.product_template_attribute_value_ids.filtered(
                 lambda x: x.attribute_id.id == val["attribute_id"]
             )
-            val["value_id"] = value.id
+            val["value_id"] = value.product_attribute_value_id.id
         return res
 
     def _get_product_attributes_values_text(self):
@@ -45,7 +45,9 @@ class ProductProduct(models.Model):
                 else:
                     value_id = attr_line.value_id.id
                 if value_id:
-                    domain.append(("product_template_attribute_value_ids", "=", value_id))
+                    domain.append(
+                        ("product_template_attribute_value_ids", "=", value_id)
+                    )
                     cont += 1
         return domain, cont
 
@@ -103,7 +105,9 @@ class ProductProduct(models.Model):
             req_attrs = product.product_tmpl_id.attribute_line_ids.filtered(
                 lambda a: a.required
             ).mapped("attribute_id")
-            errors = req_attrs - product.product_template_attribute_value_ids.mapped("attribute_id")
+            errors = req_attrs - product.product_template_attribute_value_ids.mapped(
+                "attribute_id"
+            )
             if errors:
                 raise exceptions.ValidationError(
                     _("You have to fill the following attributes:\n%s")
@@ -127,10 +131,10 @@ class ProductProduct(models.Model):
     @api.model
     def create(self, vals):
         if vals.get("product_attribute_ids"):
-            vals["product_template_attribute_value_ids"] = (
+            vals["product_template_attribute_value_ids"] = [
                 (4, x[2]["value_id"])
                 for x in vals.pop("product_attribute_ids")
                 if x[2].get("value_id")
-            )
+            ]
         obj = self.with_context(product_name=vals.get("name", ""))
         return super(ProductProduct, obj).create(vals)
