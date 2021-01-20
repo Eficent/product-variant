@@ -9,4 +9,4 @@ from odoo import fields, models
 class ProductAttributeValue(models.Model):
     _inherit = "product.attribute.value"
 
-    group_id = fields.Many2one("product.attribute.group", "Group")
+    group_ids = fields.Many2many(comodel_name="product.attribute.group", string="Product Attribute Groups")
